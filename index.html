@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KML to CSV Converter</title>
+    <style>
+        body {
+/*min-width:630px;*/
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+background-color: #f9f9f9;
+        }
+        h1, h2 {
+            color: #333;
+            text-align: center;
+position: relative;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+background-color: white;
+            
+        }
+        .drop-area {
+            border: 2px dashed #ccc;
+            border-radius: 5px;
+            padding: 25px;
+            text-align: center;
+            margin: 20px 0;
+            background-color: #fafafa;
+            cursor: pointer;
+        }
+        .drop-area.active {
+            border-color: #007bff;
+            background-color: #e6f7ff;
+        }
+        #fileInput {
+            display: none;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        #progressContainer {
+            display: none;
+            margin-top: 20px;
+        }
+        progress {
+            width: 100%;
+            height: 20px;
+        }
+        #csvPreview {
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: white;
+            white-space: pre-wrap;
+            display: none;
+        }
+        #folderContainer {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fff;
+        }
+        .folder-tree {
+            margin-left: 20px;
+        }
+        .folder-item {
+            margin: 5px 0;
+        }
+        .folder-checkbox {
+            margin-right: 8px;
+        }
+        .folder-name {
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+        }
+        .folder-name:hover {
+            text-decoration: underline;
+        }
+        .folder-children {
+            margin-left: 25px;
+            display: block;
+        }
+        .hidden {
+            display: none;
+        }
+        .stats {
+            margin-top: 10px;
+            font-style: italic;
+            color: #666;
+        }
+        .actions {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .select-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .select-buttons button {
+            margin-top: 0;
+        }
+        .process-button {
+            background-color: #007bff;
+        }
+        .process-button:hover {
+            background-color: #0056b3;
+        }
+	.logo {
+   		height: 60px;  /* Increased height */
+    		width: auto;
+    		transition: transform 0.3s ease;
+position: absolute;
+left:0;
+	}
+    </style>
+</head>
+<body>
+<h1> <img src="logo.png" alt="Logo" class="logo" onerror="this.style.display='none'"> KML to CSV Converter</h1>
+    <div class="container">
+        
+        <p>This tool extracts data from KML files containing tables with pipe information and converts it to CSV format. You can select specific folders to include in the CSV output.</p>
+        
+        <div class="drop-area" id="dropArea">
+            <p>Drag & drop your KML file here or click to select</p>
+            <input type="file" id="fileInput" accept=".kml,.xml">
+        </div>
+        
+        <div id="progressContainer">
+            <p>Processing file...</p>
+            <progress id="progressBar" value="0" max="100"></progress>
+        </div>
+        
+        <div id="statusMessage" class="status"></div>
+        
+        <div id="folderContainer">
+            <h2>Select Folders to Export</h2>
+            <div class="stats" id="folderStats"></div>
+            
+            <div class="actions">
+                <div class="select-buttons">
+                    <button id="selectAllBtn">Select All</button>
+                    <button id="deselectAllBtn">Deselect All</button>
+                    <button id="expandAllBtn">Expand All</button>
+                    <button id="collapseAllBtn">Collapse All</button>
+                </div>
+                <button id="processSelectedBtn" class="process-button">Process Selected Folders</button>
+            </div>
+            
+            <div id="folderTree" class="folder-tree">
+                <!-- Folder structure will be populated here -->
+            </div>
+        </div>
+        
+        <div id="csvPreview"></div>
+        
+        <div id="downloadContainer" style="display: none;">
+            <button id="downloadBtn">Download CSV</button>
+            <button id="backToFoldersBtn">Back to Folder Selection</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropArea = document.getElementById('dropArea');
+            const fileInput = document.getElementById('fileInput');
+            const statusMessage = document.getElementById('statusMessage');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const folderContainer = document.getElementById('folderContainer');
+            const folderTree = document.getElementById('folderTree');
+            const folderStats = document.getElementById('folderStats');
+            const csvPreview = document.getElementById('csvPreview');
+            const downloadContainer = document.getElementById('downloadContainer');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const backToFoldersBtn = document.getElementById('backToFoldersBtn');
+            const selectAllBtn = document.getElementById('selectAllBtn');
+            const deselectAllBtn = document.getElementById('deselectAllBtn');
+            const expandAllBtn = document.getElementById('expandAllBtn');
+            const collapseAllBtn = document.getElementById('collapseAllBtn');
+            const processSelectedBtn = document.getElementById('processSelectedBtn');
+            
+            let csvContent = '';
+            let xmlDoc = null;
+            let folderStructure = null;
+            
+            // Event listeners for drag and drop
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+            
+            function highlight() {
+                dropArea.classList.add('active');
+            }
+            
+            function unhighlight() {
+                dropArea.classList.remove('active');
+            }
+            
+            // Handle file drop
+            dropArea.addEventListener('drop', handleDrop, false);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                
+                if (files.length) {
+                    handleFiles(files);
+                }
+            }
+            
+            // Handle file selection via input
+            dropArea.addEventListener('click', () => {
+                fileInput.click();
+            });
+            
+            fileInput.addEventListener('change', function() {
+                if (this.files.length) {
+                    handleFiles(this.files);
+                }
+            });
+            
+            function handleFiles(files) {
+                const file = files[0];
+                if (file.name.endsWith('.kml') || file.name.endsWith('.xml')) {
+                    parseKMLFile(file);
+                } else {
+                    showStatus('Please select a valid KML or XML file.', 'error');
+                }
+            }
+            
+            function parseKMLFile(file) {
+                showStatus('Reading file...', 'success');
+                progressContainer.style.display = 'block';
+                downloadContainer.style.display = 'none';
+                csvPreview.style.display = 'none';
+                folderContainer.style.display = 'none';
+                
+                const reader = new FileReader();
+                
+                reader.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        const percentLoaded = Math.round((e.loaded / e.total) * 100);
+                        progressBar.value = percentLoaded;
+                    }
+                };
+                
+                reader.onload = function(e) {
+                    try {
+                        const content = e.target.result;
+                        const parser = new DOMParser();
+                        xmlDoc = parser.parseFromString(content, "text/xml");
+                        
+                        // Extract folder structure
+                        extractFolderStructure();
+                        
+                    } catch (error) {
+                        console.error('Error parsing KML:', error);
+                        showStatus('Error parsing KML file: ' + error.message, 'error');
+                        progressContainer.style.display = 'none';
+                    }
+                };
+                
+                reader.onerror = function() {
+                    showStatus('Error reading file.', 'error');
+                    progressContainer.style.display = 'none';
+                };
+                
+                reader.readAsText(file);
+            }
+            
+            function extractFolderStructure() {
+                showStatus('Analyzing KML structure...', 'success');
+                
+                // Extract the document element (typically <kml>)
+                const kmlElement = xmlDoc.documentElement;
+                if (!kmlElement) {
+                    showStatus('Invalid KML structure.', 'error');
+                    progressContainer.style.display = 'none';
+                    return;
+                }
+                
+                // Find the Document element
+                const documentElement = kmlElement.getElementsByTagName('Document')[0];
+                if (!documentElement) {
+                    showStatus('No Document element found in KML.', 'error');
+                    progressContainer.style.display = 'none';
+                    return;
+                }
+                
+                // Extract the name of the KML file
+                const docName = documentElement.getElementsByTagName('name')[0]?.textContent || 'Root';
+                
+                // Build the folder structure
+                folderStructure = {
+                    id: 'root',
+                    name: docName,
+                    element: documentElement,
+                    isFolder: true,
+                    children: [],
+                    placemarks: [],
+                    selected: true,
+                    expanded: true,
+                    path: docName
+                };
+                
+                // Process the document element to extract folders and placemarks
+                processElement(documentElement, folderStructure);
+                
+                // Count folders and placemarks
+                const totalStats = countFolderContents(folderStructure);
+                
+                // Show folder selection UI
+                renderFolderTree();
+                folderContainer.style.display = 'block';
+                folderStats.textContent = `Total: ${totalStats.folders} folders, ${totalStats.placemarks} placemarks`;
+                
+                progressContainer.style.display = 'none';
+                showStatus('KML structure analyzed successfully. Please select folders to export.', 'success');
+            }
+            
+            function processElement(element, parentNode) {
+                // Process all child elements
+                for (let i = 0; i < element.children.length; i++) {
+                    const child = element.children[i];
+                    
+                    if (child.tagName === 'Folder') {
+                        const folderName = child.getElementsByTagName('name')[0]?.textContent || 'Unnamed Folder';
+                        const folderId = 'folder_' + Math.random().toString(36).substr(2, 9);
+                        const folderPath = parentNode.path + '/' + folderName;
+                        
+                        const folderNode = {
+                            id: folderId,
+                            name: folderName,
+                            element: child,
+                            isFolder: true,
+                            children: [],
+                            placemarks: [],
+                            selected: true,
+                            expanded: true,
+                            path: folderPath
+                        };
+                        
+                        parentNode.children.push(folderNode);
+                        processElement(child, folderNode);
+                    } else if (child.tagName === 'Placemark') {
+                        const placemarkName = child.getElementsByTagName('name')[0]?.textContent || 'Unnamed Placemark';
+                        const placemarkId = 'placemark_' + Math.random().toString(36).substr(2, 9);
+                        
+                        parentNode.placemarks.push({
+                            id: placemarkId,
+                            name: placemarkName,
+                            element: child,
+                            path: parentNode.path
+                        });
+                    }
+                }
+            }
+            
+            function countFolderContents(folder) {
+                let folderCount = folder.isFolder ? 1 : 0;
+                let placemarkCount = folder.placemarks ? folder.placemarks.length : 0;
+                
+                if (folder.children) {
+                    for (const child of folder.children) {
+                        const childCounts = countFolderContents(child);
+                        folderCount += childCounts.folders;
+                        placemarkCount += childCounts.placemarks;
+                    }
+                }
+                
+                return { folders: folderCount, placemarks: placemarkCount };
+            }
+            
+            function renderFolderTree() {
+                folderTree.innerHTML = '';
+                
+                if (folderStructure) {
+                    // Add main folders
+                    for (const child of folderStructure.children) {
+                        folderTree.appendChild(createFolderItem(child));
+                    }
+                    
+                    // Add placemarks directly under root
+                    if (folderStructure.placemarks.length > 0) {
+                        const rootPlacemarks = document.createElement('div');
+                        rootPlacemarks.classList.add('folder-item');
+                        rootPlacemarks.innerHTML = `
+                            <label>
+                                <input type="checkbox" class="folder-checkbox" data-id="${folderStructure.id}" 
+                                       ${folderStructure.selected ? 'checked' : ''}>
+                                <span class="folder-name">${folderStructure.placemarks.length} Root Placemarks</span>
+                            </label>
+                        `;
+                        folderTree.appendChild(rootPlacemarks);
+                    }
+                }
+            }
+            
+            function createFolderItem(folder) {
+                const folderItem = document.createElement('div');
+                folderItem.classList.add('folder-item');
+                
+                const stats = countFolderContents(folder);
+                
+                let childrenHtml = '';
+                if (folder.children.length > 0 || folder.placemarks.length > 0) {
+                    childrenHtml = `
+                        <div class="folder-children ${folder.expanded ? '' : 'hidden'}" id="children-${folder.id}">
+                        </div>
+                    `;
+                }
+                
+                folderItem.innerHTML = `
+                    <label>
+                        <input type="checkbox" class="folder-checkbox" data-id="${folder.id}" 
+                               ${folder.selected ? 'checked' : ''}>
+                        <span class="folder-name" data-id="${folder.id}">
+                            ${folder.name} 
+                            <span style="font-weight: normal; color: #666; font-size: 0.85em;">
+                                (${stats.folders - 1} subfolder${stats.folders - 1 !== 1 ? 's' : ''}, 
+                                ${stats.placemarks} placemark${stats.placemarks !== 1 ? 's' : ''})
+                            </span>
+                        </span>
+                    </label>
+                    ${childrenHtml}
+                `;
+                
+                // Add click event to toggle folder expansion
+                setTimeout(() => {
+                    const folderName = folderItem.querySelector(`.folder-name[data-id="${folder.id}"]`);
+                    folderName.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const childrenDiv = document.getElementById(`children-${folder.id}`);
+                        if (childrenDiv) {
+                            childrenDiv.classList.toggle('hidden');
+                            // Update folder expanded state
+                            updateFolderExpanded(folder.id, !childrenDiv.classList.contains('hidden'));
+                        }
+                    });
+                    
+                    // Add change event to checkbox
+                    const checkbox = folderItem.querySelector(`.folder-checkbox[data-id="${folder.id}"]`);
+                    checkbox.addEventListener('change', function() {
+                        updateFolderSelected(folder.id, this.checked);
+                    });
+                }, 0);
+                
+                // Process children
+                setTimeout(() => {
+                    const childrenDiv = document.getElementById(`children-${folder.id}`);
+                    if (childrenDiv) {
+                        // Add subfolders
+                        for (const child of folder.children) {
+                            childrenDiv.appendChild(createFolderItem(child));
+                        }
+                        
+                        // Add placemarks
+                        if (folder.placemarks.length > 0) {
+                            const placemarkItem = document.createElement('div');
+                            placemarkItem.classList.add('folder-item');
+                            placemarkItem.innerHTML = `
+                                <div style="margin-left: 25px; font-size: 0.9em; color: #444;">
+                                    ${folder.placemarks.length} Placemark${folder.placemarks.length !== 1 ? 's' : ''}
+                                </div>
+                            `;
+                            childrenDiv.appendChild(placemarkItem);
+                        }
+                    }
+                }, 0);
+                
+                return folderItem;
+            }
+            
+            function updateFolderExpanded(folderId, expanded) {
+                function updateFolder(folder) {
+                    if (folder.id === folderId) {
+                        folder.expanded = expanded;
+                        return true;
+                    } else if (folder.children) {
+                        for (const child of folder.children) {
+                            if (updateFolder(child)) {
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                }
+                
+                updateFolder(folderStructure);
+            }
+            
+            function updateFolderSelected(folderId, selected) {
+                function updateFolder(folder) {
+                    if (folder.id === folderId) {
+                        folder.selected = selected;
+                        
+                        // Update children recursively
+                        if (folder.children) {
+                            for (const child of folder.children) {
+                                updateAllChildrenSelection(child, selected);
+                            }
+                        }
+                        return true;
+                    } else if (folder.children) {
+                        for (const child of folder.children) {
+                            if (updateFolder(child)) {
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                }
+                
+                updateFolder(folderStructure);
+                
+                // Update UI checkboxes for all children
+                const childCheckboxes = document.querySelectorAll(`input.folder-checkbox[data-id^="${folderId}"]`);
+                childCheckboxes.forEach(cb => {
+                    if (cb.getAttribute('data-id') !== folderId) {
+                        cb.checked = selected;
+                    }
+                });
+            }
+            
+            function updateAllChildrenSelection(folder, selected) {
+                folder.selected = selected;
+                
+                if (folder.children) {
+                    for (const child of folder.children) {
+                        updateAllChildrenSelection(child, selected);
+                    }
+                }
+            }
+            
+            // Button event handlers
+            selectAllBtn.addEventListener('click', function() {
+                updateAllFolderSelection(true);
+                const checkboxes = document.querySelectorAll('input.folder-checkbox');
+                checkboxes.forEach(cb => {
+                    cb.checked = true;
+                });
+            });
+            
+            deselectAllBtn.addEventListener('click', function() {
+                updateAllFolderSelection(false);
+                const checkboxes = document.querySelectorAll('input.folder-checkbox');
+                checkboxes.forEach(cb => {
+                    cb.checked = false;
+                });
+            });
+            
+            expandAllBtn.addEventListener('click', function() {
+                updateAllFolderExpansion(true);
+                const childrenDivs = document.querySelectorAll('.folder-children');
+                childrenDivs.forEach(div => {
+                    div.classList.remove('hidden');
+                });
+            });
+            
+            collapseAllBtn.addEventListener('click', function() {
+                updateAllFolderExpansion(false);
+                const childrenDivs = document.querySelectorAll('.folder-children');
+                childrenDivs.forEach(div => {
+                    div.classList.add('hidden');
+                });
+            });
+            
+            function updateAllFolderSelection(selected) {
+                function updateFolder(folder) {
+                    folder.selected = selected;
+                    if (folder.children) {
+                        for (const child of folder.children) {
+                            updateFolder(child);
+                        }
+                    }
+                }
+                
+                updateFolder(folderStructure);
+            }
+            
+            function updateAllFolderExpansion(expanded) {
+                function updateFolder(folder) {
+                    folder.expanded = expanded;
+                    if (folder.children) {
+                        for (const child of folder.children) {
+                            updateFolder(child);
+                        }
+                    }
+                }
+                
+                updateFolder(folderStructure);
+            }
+            
+            processSelectedBtn.addEventListener('click', function() {
+                processSelectedFolders();
+            });
+            
+            function processSelectedFolders() {
+                showStatus('Processing selected folders...', 'success');
+                progressContainer.style.display = 'block';
+                
+                // Collect all selected folders
+                const selectedFolders = [];
+                
+                function collectSelectedFolders(folder) {
+                    if (folder.selected) {
+                        selectedFolders.push(folder);
+                    }
+                    
+                    if (folder.children) {
+                        for (const child of folder.children) {
+                            if (child.selected) {
+                                collectSelectedFolders(child);
+                            }
+                        }
+                    }
+                }
+                
+                // Start from root's children
+                for (const child of folderStructure.children) {
+                    collectSelectedFolders(child);
+                }
+                
+                // Add root if selected (for placemarks directly under root)
+                if (folderStructure.selected && folderStructure.placemarks.length > 0) {
+                    selectedFolders.push(folderStructure);
+                }
+                
+                if (selectedFolders.length === 0) {
+                    showStatus('No folders selected. Please select at least one folder to process.', 'error');
+                    progressContainer.style.display = 'none';
+                    return;
+                }
+                
+                // Process data from selected folders
+                processKMLData(selectedFolders);
+            }
+            
+            function processKMLData(selectedFolders) {
+                // Initialize CSV content with headers
+                let headers = new Set();
+                let allData = [];
+                
+                // First pass: Collect all possible headers from tables
+                for (const folder of selectedFolders) {
+                    // Process placemarks in this folder
+                    for (const placemarkInfo of folder.placemarks) {
+                        const placemark = placemarkInfo.element;
+                        const description = placemark.getElementsByTagName('description')[0];
+                        
+                        if (description) {
+                            const descContent = description.textContent;
+                            
+                            // Create a temporary div to parse the HTML content
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = descContent;
+                            
+                            // Find tables with the specific background color
+                            const tables = tempDiv.querySelectorAll('table[bgcolor="#CCCCCC"]');
+                            
+                            tables.forEach(table => {
+                                const rows = table.querySelectorAll('tr');
+                                rows.forEach(row => {
+                                    const cells = row.querySelectorAll('td');
+                                    if (cells.length === 2) {
+                                        const headerText = cells[0].textContent.trim();
+                                        // Remove HTML formatting and the "b" prefix
+                                        const cleanHeader = headerText.replace(/^b>|<\/?[^>]+(>|$)/g, "");
+                                        headers.add(cleanHeader);
+                                    }
+                                });
+                            });
+                        }
+                    }
+                }
+                
+                // Convert headers set to array and sort
+                const headerArray = Array.from(headers);
+                // Add placemark name and folder path
+                const finalHeaders = ['Placemark_Name', 'Folder_Path', ...headerArray];
+                
+                // Second pass: Extract data from each placemark
+                for (const folder of selectedFolders) {
+                    // Process placemarks in this folder
+                    for (const placemarkInfo of folder.placemarks) {
+                        const placemark = placemarkInfo.element;
+                        const name = placemark.getElementsByTagName('name')[0]?.textContent || '';
+                        const folderPath = placemarkInfo.path;
+                        
+                        const description = placemark.getElementsByTagName('description')[0];
+                        if (description) {
+                            const rowData = {
+                                'Placemark_Name': name,
+                                'Folder_Path': folderPath
+                            };
+                            
+                            const descContent = description.textContent;
+                            
+                            // Create a temporary div to parse the HTML content
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = descContent;
+                            
+                            // Find tables with the specific background color
+                            const tables = tempDiv.querySelectorAll('table[bgcolor="#CCCCCC"]');
+                            
+                            tables.forEach(table => {
+                                const rows = table.querySelectorAll('tr');
+                                rows.forEach(row => {
+                                    const cells = row.querySelectorAll('td');
+                                    if (cells.length === 2) {
+                                        let headerText = cells[0].textContent.trim();
+                                        // Remove HTML formatting and the "b" prefix
+                                        headerText = headerText.replace(/^b>|<\/?[^>]+(>|$)/g, "");
+                                        const value = cells[1].textContent.trim();
+                                        rowData[headerText] = value;
+                                    }
+                                });
+                            });
+                            
+                            allData.push(rowData);
+                        }
+                    }
+                }
+                
+                // Generate CSV content
+                csvContent = finalHeaders.join(',') + '\n';
+                
+                allData.forEach(data => {
+                    const row = finalHeaders.map(header => {
+                        const value = data[header] || '';
+                        // Escape commas and quotes
+                        return `"${value.replace(/"/g, '""')}"`;
+                    });
+                    csvContent += row.join(',') + '\n';
+                });
+                
+                // Display preview
+                csvPreview.textContent = csvContent.substring(0, 2000) + (csvContent.length > 2000 ? '...' : '');
+                csvPreview.style.display = 'block';
+                
+                // Enable download
+                downloadContainer.style.display = 'block';
+                folderContainer.style.display = 'none';
+                showStatus(`Successfully processed ${allData.length} placemarks from ${selectedFolders.length} folders!`, 'success');
+                progressContainer.style.display = 'none';
+            }
+            
+            downloadBtn.addEventListener('click', function() {
+                if (csvContent) {
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', 'kml_data.csv');
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            });
+            
+            backToFoldersBtn.addEventListener('click', function() {
+                folderContainer.style.display = 'block';
+                downloadContainer.style.display = 'none';
+                csvPreview.style.display = 'none';
+            });
+            
+            function showStatus(message, type) {
+                statusMessage.textContent = message;
+                statusMessage.className = 'status ' + type;
+            }
+        });
+    </script>
+</body>
+</html>
